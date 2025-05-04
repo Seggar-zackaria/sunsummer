@@ -1,0 +1,183 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String  @map("user_id")
+  type               String
+  provider           String
+  providerAccountId  String  @map("provider_account_id")
+  refresh_token      String? @db.Text
+  access_token       String? @db.Text
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String? @db.Text
+  session_state      String?
+ 
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+ 
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+enum UserRole {
+  ADMIN 
+  USER
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  password      String?
+  role          UserRole @default(USER)
+  emailVerified DateTime? @map("email_verified")
+  image         String?
+  accounts      Account[]
+  hotelBookings HotelBooking[]
+  flightBookings FlightBooking[]
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+ 
+  @@map("users")
+}
+
+model VerificationToken {
+  id         String   @id @default(cuid())
+  // the email of the user
+  identifier String
+  token      String   @unique
+  expires    DateTime
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model Hotel {
+  id          String    @id @default(cuid())
+  name        String
+  description String    @db.Text
+  address     String
+  city        String
+  country     String
+  state       String?
+  rating      Float     @default(0)
+  images      String[]  
+  amenities   String[]  
+  roomTypes   Room[]    
+  price       Float     // Base price per night
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  bookings    HotelBooking[]
+
+  @@map("hotels")
+}
+
+model Room {
+  id          String    @id @default(cuid())
+  hotelId     String    @map("hotel_id")
+  type        String    
+  description String    @db.Text
+  capacity    Int       // Maximum number of guests that can stay in the room
+  price       Float     // Price per night
+  available   Boolean   @default(true)
+  amenities   String[]
+  images      String[]
+  hotel       Hotel     @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  bookings    HotelBooking[]
+
+  @@map("rooms")
+}
+
+model Flight {
+  id              String    @id @default(cuid())
+  flightNumber    String    @unique
+  airline         String
+  departureCity   String
+  arrivalCity     String
+  departureTime   DateTime
+  arrivalTime     DateTime
+  price           Float
+  duration        Int       
+  capacity        Int
+  availableSeats  Int
+  stops           Int      @default(0)
+  status          FlightStatus @default(SCHEDULED)
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  bookings        FlightBooking[]
+
+  @@map("flights")
+}
+
+enum FlightStatus {
+  SCHEDULED
+  DELAYED
+  CANCELLED
+  COMPLETED
+}
+
+model HotelBooking {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  hotelId   String   @map("hotel_id")
+  roomId    String   @map("room_id")
+  checkIn   DateTime
+  checkOut  DateTime
+  status    BookingStatus @default(PENDING)
+  totalPrice Float
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hotel     Hotel   @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  room      Room    @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@map("hotel_bookings")
+}
+
+model FlightBooking {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  flightId  String   @map("flight_id")
+  seatNumber String
+  status    BookingStatus @default(PENDING)
+  price     Float
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  flight    Flight  @relation(fields: [flightId], references: [id], onDelete: Cascade)
+
+  @@map("flight_bookings")
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+model PasswordResetToken {
+  id String @id @default(cuid())
+  email String
+  token String @unique
+  expires DateTime
+  @@unique([email, token])
+  @@map("password_reset_tokens")
+}
