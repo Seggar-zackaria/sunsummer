@@ -18,13 +18,16 @@ import { Button } from "@/components/ui/button";
 import { FormError } from "@/components/form-error";
 import { FormSuccess } from "@/components/form-succes";
 import { Login } from "@/actions/login";
-import { useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { DEFAULT_LOGIN_REDIRECT } from "@/routes";
 import Link from "next/link";
 import { Eye, EyeOff } from "lucide-react";
+import { signIn, useSession } from "next-auth/react";
 
 const LoginForm = () => {
+  const router = useRouter();
+  const { data: session, status, update } = useSession();
   const form = useForm<z.infer<typeof LoginSchema>>({
     resolver: zodResolver(LoginSchema),
     defaultValues: {
@@ -34,32 +37,91 @@ const LoginForm = () => {
   });
 
   const searchParams = useSearchParams();
-  const callBackUrl = searchParams.get("callBackUrl") || DEFAULT_LOGIN_REDIRECT;
+  const callbackUrl = searchParams.get("callbackUrl") || DEFAULT_LOGIN_REDIRECT;
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
+  
+  // Debug session status for troubleshooting
+  useEffect(() => {
+    console.log("Current session status:", status);
+    console.log("Current session:", session);
+  }, [status, session]);
+  
+  // Redirect when authentication status changes to authenticated
+  useEffect(() => {
+    if (status === "authenticated" && session?.user && !isRedirecting) {
+      console.log("Session authenticated, redirecting to:", callbackUrl);
+      console.log("Session data:", session);
+      setIsRedirecting(true);
+      
+      // Add a small delay to ensure cookies are set properly
+      setTimeout(() => {
+        router.push(callbackUrl);
+      }, 300);
+    }
+  }, [status, router, callbackUrl, session, isRedirecting]);
 
   const onSubmit = async (values: z.infer<typeof LoginSchema>) => {
+    if (isPending) return;
+    
     setIsPending(true);
     setErrorMessage(null);
     setSuccessMessage(null);
 
-    const formData = new FormData();
-    formData.append("email", values.email);
-    formData.append("password", values.password);
-    formData.append("redirectTo", callBackUrl);
-
-    const response = await Login({ values, formData });
-
-    if (response.error) {
-      setErrorMessage(response.error);
-    } else if (response.success) {
-      setSuccessMessage(response.success);
+    try {
+      // First try server action for email verification check
+      const formData = new FormData();
+      formData.append("email", values.email);
+      formData.append("password", values.password);
+      formData.append("callbackUrl", callbackUrl);
+      
+      const actionResponse = await Login({ values, formData });
+      
+      if (actionResponse.error) {
+        setErrorMessage(actionResponse.error);
+        setIsPending(false);
+        return;
+      }
+      
+      if (actionResponse.success === "Confirmation email sent") {
+        setSuccessMessage(actionResponse.success);
+        setIsPending(false);
+        return;
+      }
+      
+      // If no errors and not waiting for email verification, proceed with client-side sign-in
+      console.log("Attempting sign in with credentials...");
+      const result = await signIn("credentials", {
+        email: values.email,
+        password: values.password,
+        redirect: false,
+        callbackUrl: callbackUrl
+      });
+      
+      console.log("Sign in result:", result);
+      
+      if (result?.error) {
+        setErrorMessage(result.error);
+        setIsPending(false);
+        return;
+      }
+      
+      // Force a session update to ensure we have the latest data
+      await update();
+      
+      // If we get here with no errors, show success message briefly
+      setSuccessMessage("Login successful! Redirecting...");
+      
+      // The redirection will happen via the useEffect when status changes
+    } catch (error) {
+      console.error("Login error:", error);
+      setErrorMessage("Something went wrong. Please try again.");
+      setIsPending(false);
     }
-
-    setIsPending(false);
   };
 
   const togglePasswordVisibility = () => {
@@ -139,12 +201,13 @@ const LoginForm = () => {
 
             <Button
               variant="default"
-              disabled={isPending}
+              disabled={isPending || status === "loading"}
               type="submit"
               className="w-full h-12 mt-6 bg-emerald-600 hover:bg-emerald-700"
             >
-              Login
+              {isPending ? "Signing in..." : "Login"}
             </Button>
+            
           </form>
         </Form>
       </CardWrapper>

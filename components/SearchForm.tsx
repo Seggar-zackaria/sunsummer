@@ -11,10 +11,35 @@ import { CalendarIcon, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DateRange } from "react-day-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useRouter } from "next/navigation";
+import { Country } from "country-state-city";
 
 type TripType = "roundTrip" | "oneWay";
 
+// Function to find country code from name
+function findCountryCodeByName(countryName: string): string | null {
+  const searchTerm = countryName.toLowerCase().trim();
+  const countries = Country.getAllCountries();
+  
+  // First try exact match
+  const exactMatch = countries.find(
+    country => country.name.toLowerCase() === searchTerm
+  );
+  
+  if (exactMatch) return exactMatch.isoCode;
+  
+  // Then try partial match
+  const partialMatch = countries.find(
+    country => country.name.toLowerCase().includes(searchTerm)
+  );
+  
+  if (partialMatch) return partialMatch.isoCode;
+  
+  return null;
+}
+
 const SearchForm = () => {
+  const router = useRouter();
   const [searchType, setSearchType] = useState<"flight" | "hotel">("flight");
   const [tripType, setTripType] = useState<TripType>("roundTrip");
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
@@ -25,6 +50,9 @@ const SearchForm = () => {
   const [roomsCount, setRoomsCount] = useState(1);
   const [guestsCount, setGuestsCount] = useState(1);
   const [isRoomGuestOpen, setIsRoomGuestOpen] = useState(false);
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [hotelDestination, setHotelDestination] = useState("");
 
   const handleSearchTypeChange = (value: string) => {
     setSearchType(value as "flight" | "hotel");
@@ -44,6 +72,24 @@ const SearchForm = () => {
     if (value >= 1 && value <= 10) {
       setGuestsCount(value);
     }
+  };
+
+  const handleFlightSearch = () => {
+    const searchDate = tripType === "roundTrip" ? dateRange?.from : singleDate;
+    const dateParam = searchDate ? format(searchDate, "yyyy-MM-dd") : "";
+    router.push(`/booking-flight?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&date=${encodeURIComponent(dateParam)}`);
+  };
+
+  const handleHotelSearch = () => {
+    // Create date params regardless of format errors (to be fixed later)
+    const startDate = dateRange?.from ? format(dateRange.from, "yyyy-MM-dd") : "";
+    const endDate = dateRange?.to ? format(dateRange.to, "yyyy-MM-dd") : "";
+    
+    // Try to convert location name to country code if it matches a country
+    const countryCode = findCountryCodeByName(hotelDestination);
+    const searchLocation = countryCode || hotelDestination;
+    
+    router.push(`/booking-hotel?location=${encodeURIComponent(searchLocation)}&rooms=${roomsCount}&guests=${guestsCount}&checkIn=${startDate}&checkOut=${endDate}`);
   };
 
   return (
@@ -79,6 +125,8 @@ const SearchForm = () => {
                   placeholder="New York"
                   className="w-full"
                   aria-label="Enter departure location"
+                  value={from}
+                  onChange={(e) => setFrom(e.target.value)}
                 />
               </div>
               
@@ -91,6 +139,8 @@ const SearchForm = () => {
                   placeholder="Dubai"
                   className="w-full"
                   aria-label="Enter arrival location"
+                  value={to}
+                  onChange={(e) => setTo(e.target.value)}
                 />
               </div>
               
@@ -242,6 +292,7 @@ const SearchForm = () => {
               <Button 
                 className="w-full sm:w-auto bg-green-500 hover:bg-green-600 text-white"
                 aria-label="Show available flights"
+                onClick={handleFlightSearch}
               >
                 Show Flights
               </Button>
@@ -250,60 +301,21 @@ const SearchForm = () => {
           
           <TabsContent value="hotel" className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="md:col-span-2">
+              <div>
                 <label htmlFor="hotel-location" className="block text-sm font-medium text-gray-700 mb-1">
-                  Enter Destination
+                  Destination
                 </label>
                 <Input
                   id="hotel-location"
                   placeholder="Bali, Indonesia"
                   className="w-full"
                   aria-label="Enter hotel location"
+                  value={hotelDestination}
+                  onChange={(e) => setHotelDestination(e.target.value)}
                 />
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Stay Dates</label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !dateRange && "text-muted-foreground"
-                      )}
-                      aria-label="Select date range"
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {dateRange?.from ? (
-                        dateRange.to ? (
-                          <>
-                            {format(dateRange.from, "PPP")} - {format(dateRange.to, "PPP")}
-                          </>
-                        ) : (
-                          format(dateRange.from, "PPP")
-                        )
-                      ) : (
-                        <span>Pick dates</span>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="range"
-                      selected={dateRange}
-                      onSelect={setDateRange}
-                      initialFocus
-                      numberOfMonths={2}
-                      disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-            </div>
-            
-            <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-              <div className="w-full sm:w-auto">
                 <label htmlFor="hotel-rooms-guests" className="block text-sm font-medium text-gray-700 mb-1">
                   Rooms & Guests
                 </label>
@@ -380,9 +392,54 @@ const SearchForm = () => {
                 </Popover>
               </div>
               
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Stay Dates</label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !dateRange && "text-muted-foreground"
+                      )}
+                      aria-label="Select date range"
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {dateRange?.from ? (
+                        dateRange.to ? (
+                          <>
+                            {format(dateRange.from, "PPP")} - {format(dateRange.to, "PPP")}
+                          </>
+                        ) : (
+                          format(dateRange.from, "PPP")
+                        )
+                      ) : (
+                        <span>Pick dates</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="range"
+                      selected={dateRange}
+                      onSelect={setDateRange}
+                      initialFocus
+                      numberOfMonths={2}
+                      disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
+            
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+              <div className="w-full sm:w-auto">
+              </div>
+              
               <Button 
                 className="w-full sm:w-auto bg-green-500 hover:bg-green-600 text-white"
                 aria-label="Show available hotels"
+                onClick={handleHotelSearch}
               >
                 Show Hotels
               </Button>

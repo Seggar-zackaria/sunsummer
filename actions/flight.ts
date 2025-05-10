@@ -221,3 +221,49 @@ export async function getAllFlights() {
     };
   }
 }
+
+export async function searchFlights({
+  from,
+  to,
+  date,
+}: {
+  from: string;
+  to: string;
+  date?: string;
+}) {
+  try {
+    const where: any = {
+      departureCity: { contains: from, mode: "insensitive" },
+      arrivalCity: { contains: to, mode: "insensitive" },
+    };
+    if (date) {
+      const start = new Date(date);
+      const end = new Date(date);
+      end.setHours(23, 59, 59, 999);
+      where.departureTime = { gte: start, lte: end };
+    }
+
+    const flights = await db.flight.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        flightNumber: true,
+        departureCity: true,
+        arrivalCity: true,
+        departureTime: true,
+        arrivalTime: true,
+        status: true,
+        price: true,
+        duration: true,
+        stops: true,
+        airline: true,
+      },
+    });
+
+    return { status: 200, data: flights };
+  } catch (error) {
+    console.error("Flights search error:", error);
+    return { status: 500, error: "Failed to search flights" };
+  }
+}

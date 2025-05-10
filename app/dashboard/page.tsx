@@ -3,19 +3,10 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Image from "next/image";
 import { useSession } from "next-auth/react";
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { SessionDebug } from "@/components/session-debug";
 
 export default function DashboardPage() {
   const { data: session, status } = useSession();
-  const router = useRouter();
-  
-  useEffect(() => {
-    if (status === "unauthenticated") {
-      router.push("/auth/login");
-    }
-  }, [status, router]);
-  
   const user = session?.user;
 
   if (status === "loading") {
@@ -77,6 +68,7 @@ export default function DashboardPage() {
           </p>
         </div>
       )}
+      <SessionDebug />
     </div>
   );
 }

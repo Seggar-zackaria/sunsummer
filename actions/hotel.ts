@@ -164,3 +164,37 @@ export async function deleteHotel(id: string) {
     };
   }
 }
+
+
+export async function getHotels(signal?: AbortSignal) {
+  try {
+    const hotels = await db.hotel.findMany({
+      include: {
+        roomTypes: true,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+    return hotels;
+  } catch (error) {
+    console.error("Error fetching hotels:", error);
+    return [];
+  }
+}
+
+
+export async function getHotelDetails(id: string) {
+  try {
+    const hotel = await db.hotel.findUnique({
+      where: { id },
+      include: {
+        roomTypes: true,
+      }
+    });
+    return hotel;
+  } catch (error) {
+    console.error("Error fetching hotel details:", error);
+    return null;
+  }
+}

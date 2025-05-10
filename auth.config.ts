@@ -55,10 +55,11 @@ export const authConfig = {
           email: existingUser.email,
           name: existingUser.name,
           image: existingUser.image,
+          role: existingUser.role,
         };
       },
     }),
   ],
-  secret: process.env.NEXTAUTH_SECRET,
+  secret: process.env.AUTH_SECRET,
 
 } satisfies NextAuthConfig;

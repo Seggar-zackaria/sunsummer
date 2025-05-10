@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { Check, ChevronsUpDown, Loader2, AlertCircle } from "lucide-react";
+import { Check, ChevronsUpDown, Loader2, AlertCircle, PlusCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -32,7 +32,7 @@ interface Airport {
 
 interface AirportSelectProps {
   value: string;
-  onChange: (value: string) => void;
+  onChange: (name: string, code?: string) => void;
   placeholder?: string;
   disabled?: boolean;
 }
@@ -149,14 +149,12 @@ export function AirportSelect({
   
   const debouncedSearch = useDebounce(search, 350);
 
-  // Cache fallback airports on component mount
   useEffect(() => {
     FALLBACK_AIRPORTS.forEach(airport => {
       saveToCache(airport);
     });
   }, []);
 
-  // Load stored airport data from localStorage on mount
   useEffect(() => {
     try {
       const stored = localStorage.getItem('airports-cache');
@@ -169,7 +167,6 @@ export function AirportSelect({
     }
   }, []);
 
-  // Save airport to localStorage cache
   const saveToCache = (airport: Airport) => {
     try {
       const newCache = {
@@ -183,19 +180,17 @@ export function AirportSelect({
     }
   };
 
-  // Function to retry the last fetch
   const retryFetch = () => {
     setRetryCount(prev => prev + 1);
     setError(null);
   };
 
-  // Use fallback data
+  
   const useFallbackData = () => {
     setUseFallback(true);
     setError(null);
     setLoading(false);
 
-    // Filter fallback airports based on search
     if (debouncedSearch && debouncedSearch.length >= 2) {
       const filtered = FALLBACK_AIRPORTS.filter(airport => 
         airport.name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
@@ -213,9 +208,7 @@ export function AirportSelect({
     }
   };
 
-  // Search airports from API
   useEffect(() => {
-    // If using fallback mode, filter the fallback data instead
     if (useFallback) {
       useFallbackData();
       return;
@@ -235,7 +228,6 @@ export function AirportSelect({
       setError(null);
       
       try {
-        // Add timestamp to prevent caching issues
         const timestamp = new Date().getTime();
         const response = await fetch(
           `/api/amadeus/airports?keyword=${encodeURIComponent(debouncedSearch)}&_t=${timestamp}`,
@@ -248,10 +240,8 @@ export function AirportSelect({
           }
         );
         
-        // Handle HTTP errors with more specific messages
         if (!response.ok) {
           if (response.status === 500) {
-            // Automatically switch to fallback mode on server error
             useFallbackData();
             return;
           } else if (response.status === 429) {
@@ -263,11 +253,9 @@ export function AirportSelect({
           }
         }
         
-        // Reset retry count on success
         setRetryCount(0);
         setUseFallback(false);
         
-        // Safe JSON parsing
         let data;
         try {
           data = await response.json();
@@ -275,47 +263,38 @@ export function AirportSelect({
           throw new Error("Invalid JSON response from server");
         }
         
-        // Validate data structure
         if (!data || !Array.isArray(data.data)) {
-          // Check if we received an error message in the response
           if (data && data.error) {
             throw new Error(`API error: ${data.error}`);
           }
           throw new Error("Invalid API response format");
         }
         
-        // Update airports and cache them
         const airportData = data.data as Airport[];
         setAirports(airportData);
         
-        // Cache each airport
         airportData.forEach(airport => {
           saveToCache(airport);
         });
         
-        // Show message if no results
         if (airportData.length === 0) {
           setError("No airports found matching your search");
         }
       } catch (err) {
         if (err instanceof Error) {
           if (err.name === 'AbortError') {
-            // Request was aborted, do nothing
             return;
           }
           setError(err.message || "Failed to fetch airports");
           
-          // Log the error for debugging
           console.error("Airport fetch error:", err);
           
-          // After max retries, switch to fallback
           if (retryCount >= maxRetries) {
             useFallbackData();
           }
         } else {
           setError("An unexpected error occurred");
           
-          // After max retries or on unknown errors, switch to fallback
           if (retryCount >= maxRetries) {
             useFallbackData();
           }
@@ -333,38 +312,49 @@ export function AirportSelect({
 
     FetchAirports();
 
-    // Cleanup function to abort fetch on unmount or when search changes
     return () => {
       controller.abort();
     };
   }, [debouncedSearch, retryCount]);
 
-  // Find the selected airport from memory or cache
   const selectedAirport = useMemo(() => {
     if (!value) return null;
     
-    // First check current results
-    const fromResults = airports.find(airport => airport.iataCode === value);
+    const fromResults = airports.find(airport => airport.name === value);
     if (fromResults) return fromResults;
     
-    // Then check cache
-    if (storedAirports[value]) return storedAirports[value];
+    const cachedAirport = Object.values(storedAirports).find(a => a.name === value);
+    if (cachedAirport) return cachedAirport;
     
     return null;
   }, [value, airports, storedAirports]);
 
-  // Display value for the button
   const displayValue = useMemo(() => {
     if (value && selectedAirport && selectedAirport.address) {
-      return `${selectedAirport.iataCode} - ${selectedAirport.address.cityName}`;
+      return `${selectedAirport.name} (${selectedAirport.iataCode})`;
     }
     
     if (value) {
-      return value; // Fallback to the raw value
+      return value; 
     }
     
     return placeholder;
   }, [value, selectedAirport, placeholder]);
+
+  const handleManualEntry = () => {
+    if (search && search.trim() !== "") {
+      onChange(search.trim());
+      setOpen(false);
+      setSearch("");
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Enter' && e.ctrlKey) {
+      e.preventDefault();
+      handleManualEntry();
+    }
+  };
 
   return (
     <div className="relative">
@@ -383,7 +373,7 @@ export function AirportSelect({
           </Button>
         </PopoverTrigger>
         <PopoverContent className="p-0 w-[300px]" align="start">
-          <Command shouldFilter={false}>
+          <Command shouldFilter={false} onKeyDown={handleKeyDown}>
             <CommandInput
               placeholder={placeholder}
               value={search}
@@ -391,6 +381,21 @@ export function AirportSelect({
               className="h-9"
               data-testid="airport-search-input"
             />
+            
+            {search && search.length > 0 && (
+              <div className="px-2 py-1.5 border-b">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-start text-sm font-normal"
+                  onClick={handleManualEntry}
+                >
+                  <PlusCircle className="h-4 w-4 mr-2" />
+                  Use "{search}" as custom entry
+                  <span className="ml-auto text-xs text-muted-foreground">(Ctrl+Enter)</span>
+                </Button>
+              </div>
+            )}
             
             <CommandList>
               {loading && (
@@ -464,9 +469,9 @@ export function AirportSelect({
                 {airports.map((airport) => (
                   <CommandItem
                     key={airport.iataCode}
-                    value={airport.iataCode}
+                    value={airport.name}
                     onSelect={() => {
-                      onChange(airport.iataCode);
+                      onChange(airport.name, airport.iataCode);
                       saveToCache(airport);
                       setOpen(false);
                       setSearch("");
@@ -476,15 +481,15 @@ export function AirportSelect({
                     <Check
                       className={cn(
                         "mr-2 h-4 w-4",
-                        value === airport.iataCode ? "opacity-100" : "opacity-0"
+                        value === airport.name ? "opacity-100" : "opacity-0"
                       )}
                     />
                     <div className="flex flex-col">
                       <span className="font-medium">
-                        {airport.iataCode} - {airport.address?.cityName}
+                        {airport.name} ({airport.iataCode})
                       </span>
                       <span className="text-xs text-muted-foreground">
-                        {airport.name}, {airport.address?.countryName}
+                        {airport.address?.cityName}, {airport.address?.countryName}
                       </span>
                     </div>
                   </CommandItem>
