@@ -1,5 +1,6 @@
 import * as z from "zod";
-import { isAfter, parse } from "date-fns";
+const dateFns = require('date-fns');
+const { isAfter, parse } = dateFns;
 
 
 // const formatPhoneNumber = (value: string): string => {
@@ -163,7 +164,7 @@ export const flightSchema = z.object({
   
   duration: z
     .number()
-    .positive({ message: "Duration must be greater than 0" }),
+    .default(0),
   
   stops: z
     .number()

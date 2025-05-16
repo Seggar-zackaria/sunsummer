@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { useCallback, useState } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { flightSchema } from "@/schemas";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,7 +35,8 @@ import { CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { FlightFormValues } from "@/lib/definitions";
 import { AirportSelect } from "./airport-select";
-import { format } from "date-fns";
+const dateFns = require('date-fns');
+const { format } = dateFns;
 
 export default function AddFlightForm() {
   const [error, setError] = useState<string | undefined>();
@@ -58,7 +59,37 @@ export default function AddFlightForm() {
       arrivalTime: "",
       status: "SCHEDULED" as const,
     },
+    mode: "onChange", // Validate on change for better user feedback
   });
+
+  // Calculate and update duration whenever departure/arrival times change
+  useEffect(() => {
+    const subscription = form.watch((value, { name }) => {
+      if (name === 'departureTime' || name === 'arrivalTime' || name === 'date') {
+        const { departureTime, arrivalTime, date } = form.getValues();
+        
+        if (departureTime && arrivalTime && date) {
+          // Parse times to calculate minutes
+          const [departureHour, departureMinute] = departureTime.split(':').map(Number);
+          const [arrivalHour, arrivalMinute] = arrivalTime.split(':').map(Number);
+          
+          // Calculate total minutes for each time
+          let departureMinutes = departureHour * 60 + departureMinute;
+          let arrivalMinutes = arrivalHour * 60 + arrivalMinute;
+          
+          // Handle overnight flights
+          if (arrivalMinutes < departureMinutes) {
+            arrivalMinutes += 24 * 60; // Add a day in minutes
+          }
+          
+          const durationMinutes = arrivalMinutes - departureMinutes;
+          form.setValue('duration', durationMinutes, { shouldValidate: true });
+        }
+      }
+    });
+    
+    return () => subscription.unsubscribe();
+  }, [form]);
 
   const isFormValid = form.formState.isValid;
 
@@ -68,10 +99,28 @@ export default function AddFlightForm() {
     setLoading(true);
 
     try {
+      // Ensure duration is properly set before submission
+      const { departureTime, arrivalTime, date } = values;
+      
+      if (departureTime && arrivalTime && date) {
+        // Calculate duration one more time to ensure it's correct
+        const [departureHour, departureMinute] = departureTime.split(':').map(Number);
+        const [arrivalHour, arrivalMinute] = arrivalTime.split(':').map(Number);
+        
+        let departureMinutes = departureHour * 60 + departureMinute;
+        let arrivalMinutes = arrivalHour * 60 + arrivalMinute;
+        
+        if (arrivalMinutes < departureMinutes) {
+          arrivalMinutes += 24 * 60;
+        }
+        
+        values.duration = arrivalMinutes - departureMinutes;
+      }
+
       const response = await addFlight(values);
       
       if (response.status === 201) {
-        setSuccess(response.message);
+        setSuccess(response.message || "Flight added successfully");
         form.reset();
       } else if (response.status === 400 && response.error === "Flight number already exists") {
         setError("A flight with this number already exists on this date");
@@ -80,28 +129,34 @@ export default function AddFlightForm() {
       }
     } catch (error) {
       console.error("Submission error:", error);
-      setError("Something went wrong!");
+      setError("Something went wrong with the submission. Please try again.");
     } finally {
       setLoading(false);
     }
   }, [form]);
 
   return (
-    <div className="w-full">
+    <div className="w-full mx-auto max-w-7xl">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold tracking-tight">Add New Flight</h1>
+        <p className="text-muted-foreground mt-1">Enter the flight details below</p>
+      </div>
+      
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <FormField
               control={form.control}
               name="flightNumber"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Flight Number</FormLabel>
+                  <FormLabel className="text-base font-medium">Flight Number</FormLabel>
                   <FormControl>
                     <Input 
                       {...field} 
                       placeholder="Enter flight number"
                       onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                      className="h-10"
                     />
                   </FormControl>
                   <FormMessage />
@@ -114,11 +169,12 @@ export default function AddFlightForm() {
               name="airline"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Airline</FormLabel>
+                  <FormLabel className="text-base font-medium">Airline</FormLabel>
                   <FormControl>
                       <Input 
                         {...field}
                         placeholder="Enter the Airline Company"
+                        className="h-10"
                       />
                   </FormControl>
                   <FormDescription>add an airline ex: airAlgerie</FormDescription>
@@ -132,7 +188,7 @@ export default function AddFlightForm() {
               name="departureCity"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Departure City</FormLabel>
+                  <FormLabel className="text-base font-medium">Departure City</FormLabel>
                   <FormControl>
                     <AirportSelect
                       value={field.value || ""}
@@ -150,7 +206,7 @@ export default function AddFlightForm() {
               name="arrivalCity"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Arrival City</FormLabel>
+                  <FormLabel className="text-base font-medium">Arrival City</FormLabel>
                   <FormControl>
                     <AirportSelect
                       value={field.value || ""}
@@ -168,19 +224,19 @@ export default function AddFlightForm() {
               name="date"
               render={({ field }) => (
                 <FormItem className="flex flex-col">
-                  <FormLabel>Date</FormLabel>
+                  <FormLabel className="text-base font-medium">Date</FormLabel>
                   <Popover>
                     <PopoverTrigger asChild>
                       <FormControl>
                         <Button
                           variant={"outline"}
                           className={cn(
-                            "w-full pl-3 text-left font-normal",
+                            "w-full pl-3 text-left font-normal h-10",
                             !field.value && "text-muted-foreground"
                           )}
                         >
                            {field.value ? (
-                            format(field.value, "MMMM d, yyyy")
+                            format(new Date(field.value), "MMMM d, yyyy")
                           ) : (
                             <span>Pick a date</span>
                           )}
@@ -192,10 +248,19 @@ export default function AddFlightForm() {
                       <Calendar
                         mode="single"
                         selected={field.value ? new Date(field.value) : undefined}
-                        onSelect={(date) => field.onChange(date?.toISOString().split('T')[0])}
+                        onSelect={(date) => {
+                          if (date) {
+                            // Format date as YYYY-MM-DD directly to avoid timezone issues
+                            const year = date.getFullYear();
+                            const month = String(date.getMonth() + 1).padStart(2, '0');
+                            const day = String(date.getDate()).padStart(2, '0');
+                            field.onChange(`${year}-${month}-${day}`);
+                          } else {
+                            field.onChange("");
+                          }
+                        }}
                         disabled={(date) => date < new Date()}
                         initialFocus
-
                       />
                     </PopoverContent>
                   </Popover>
@@ -209,30 +274,14 @@ export default function AddFlightForm() {
               name="price"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Price (DZD)</FormLabel>
+                  <FormLabel className="text-base font-medium">Price (DZD)</FormLabel>
                   <FormControl>
                     <Input 
                       type="number" 
                       {...field} 
                       onChange={(e) => field.onChange(Number(e.target.value))}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="duration"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Duration (minutes)</FormLabel>
-                  <FormControl>
-                    <Input 
-                      type="number" 
-                      {...field}
-                      onChange={(e) => field.onChange(Number(e.target.value))}
+                      className="h-10"
+                      min="0"
                     />
                   </FormControl>
                   <FormMessage />
@@ -245,12 +294,14 @@ export default function AddFlightForm() {
               name="stops"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Number of Stops</FormLabel>
+                  <FormLabel className="text-base font-medium">Number of Stops</FormLabel>
                   <FormControl>
                     <Input 
                       type="number" 
                       {...field}
                       onChange={(e) => field.onChange(Number(e.target.value))}
+                      className="h-10"
+                      min="0"
                     />
                   </FormControl>
                   <FormMessage />
@@ -263,12 +314,12 @@ export default function AddFlightForm() {
               name="departureTime"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Departure Time</FormLabel>
+                  <FormLabel className="text-base font-medium">Departure Time</FormLabel>
                   <FormControl>
                     <Input
                       type="time"
                       {...field}
-                      className="w-full"
+                      className="w-full h-10"
                     />
                   </FormControl>
                   <FormMessage />
@@ -281,12 +332,12 @@ export default function AddFlightForm() {
               name="arrivalTime"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Arrival Time</FormLabel>
+                  <FormLabel className="text-base font-medium">Arrival Time</FormLabel>
                   <FormControl>
                     <Input
                       type="time"
                       {...field}
-                      className="w-full"
+                      className="w-full h-10"
                     />
                   </FormControl>
                   <FormMessage />
@@ -299,10 +350,10 @@ export default function AddFlightForm() {
               name="status"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Status</FormLabel>
+                  <FormLabel className="text-base font-medium">Status</FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl>
-                      <SelectTrigger>
+                      <SelectTrigger className="h-10">
                         <SelectValue placeholder="Select status" />
                       </SelectTrigger>
                     </FormControl>
@@ -319,19 +370,21 @@ export default function AddFlightForm() {
             />
           </div>
 
-          <FormError message={error} />
-          <FormSuccess message={success} />
+          <div className="space-y-4">
+            <FormError message={error} />
+            <FormSuccess message={success} />
 
-          <Button
-            type="submit"
-            disabled={loading}
-            className={cn(
-              "w-full",
-              !isFormValid && "opacity-50 cursor-not-allowed"
-            )}
-          >
-            {loading ? "Adding Flight..." : "Add Flight"}
-          </Button>
+            <Button
+              type="submit"
+              disabled={loading || !isFormValid}
+              className={cn(
+                "w-full py-2.5 text-base font-medium",
+                (!isFormValid || loading) && "opacity-50 cursor-not-allowed"
+              )}
+            >
+              {loading ? "Adding Flight..." : "Add Flight"}
+            </Button>
+          </div>
         </form>
       </Form>
     </div>

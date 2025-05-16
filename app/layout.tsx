@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/providers/auth-provider";
+import { Toaster } from "sonner";
 import { auth } from "@/auth";
 
 const geist = Geist({
@@ -30,6 +31,7 @@ export default async function RootLayout({
           <main>
             {children}
           </main>
+          <Toaster />
         </AuthProvider>
       </body>
     </html>

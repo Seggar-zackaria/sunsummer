@@ -69,4 +69,16 @@ export interface ImageInputProps<T extends CreateHotelForm | UpdateHotelForm> {
   existingImages?: string[];
 }
 
-export type FlightFormValues = z.infer<typeof flightSchema>;
+export type FlightFormValues = {
+  flightNumber: string;
+  status: "SCHEDULED" | "DELAYED" | "CANCELLED" | "COMPLETED";
+  date: string;
+  airline: string;
+  departureCity: string;
+  arrivalCity: string;
+  departureTime: string;
+  arrivalTime: string;
+  price: number;
+  stops: number;
+  duration: number;
+};

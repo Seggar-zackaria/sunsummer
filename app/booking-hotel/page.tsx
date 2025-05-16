@@ -450,7 +450,7 @@ export default function BookingHotelPage() {
   return (
     <>
       <Navbar/>
-      <main className="container mt-8 mx-auto px-4 py-12">
+      <main className="container mx-auto px-4 py-12">
       {/* <SearchHotelForm /> */}
       
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 mt-8">

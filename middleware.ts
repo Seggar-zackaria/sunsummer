@@ -4,10 +4,15 @@ import { DEFAULT_LOGIN_REDIRECT } from "@/routes";
 
 // Define protected routes and required roles
 const protectedRoutes: Record<string, string[]> = {
-  '/admin': ['ADMIN'],
-  '/bookings/manage': ['ADMIN'],
-  '/dashboard': ['USER', 'ADMIN'] // Allow both USER and ADMIN roles
-}
+  '/dashboard/admin': ['ADMIN'],
+  '/dashboard/admin/hotel': ['ADMIN'],
+  '/dashboard/admin/rooms': ['ADMIN'],
+  '/dashboard/admin/flight': ['ADMIN'],
+  '/dashboard/admin/bookings': ['ADMIN'],
+  '/dashboard': ['USER', 'ADMIN'],
+  '/dashboard/bookings': ['USER', 'ADMIN'],
+  '/dashboard/profile': ['USER', 'ADMIN']
+};
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -21,7 +26,6 @@ export async function middleware(request: NextRequest) {
   if (route) {
     console.log("Protected route detected:", pathname);
     
-    // Get the token using getToken with debug enabled
     const token = await getToken({ 
       req: request,
       secret: process.env.AUTH_SECRET,
@@ -48,13 +52,18 @@ export async function middleware(request: NextRequest) {
     // Make sure user has a role and it's included in the required roles
     if (!userRole || !requiredRoles.includes(userRole)) {
       console.log("User does not have required role, redirecting to unauthorized");
+      // If user is logged in but accessing admin routes without admin role,
+      // redirect to user dashboard
+      if (userRole === 'USER' && pathname.startsWith('/dashboard/admin')) {
+        return NextResponse.redirect(new URL('/dashboard', request.url));
+      }
+      // For other unauthorized access, show unauthorized page
       return NextResponse.redirect(new URL('/unauthorized', request.url));
     }
     
     console.log("Access granted to protected route");
   }
   
-  // Continue with the request
   return NextResponse.next();
 }
 

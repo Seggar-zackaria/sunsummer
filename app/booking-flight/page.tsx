@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
-import { useSearchParams } from "next/navigation";
-import { ChevronDown, ChevronUp, Heart, ArrowDownAZ, ArrowUpDown, Clock, Plane } from "lucide-react";
+import { useSearchParams, useRouter } from "next/navigation";
+import { ChevronDown, ChevronUp, Heart, ArrowDownAZ, ArrowUpDown, Clock, Plane, Search, CalendarIcon } from "lucide-react";
 import Navbar from "@/components/Navbar";   
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,6 +13,13 @@ import { getAllFlights } from "@/actions/flight";
 import { formatDistanceStrict } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+import { bookFlight } from "@/actions/flight-booking";
+import { toast } from "sonner";
 
 type FlightType = {
   id: string;
@@ -56,8 +63,17 @@ const formatDuration = (minutes: number): string => {
   return `${hours}h ${mins}m`;
 };
 
+const formatDate = (date: Date): string => {
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(date);
+};
+
 export default function FlightListingPage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [flights, setFlights] = useState<FlightType[]>([]);
@@ -383,7 +399,116 @@ export default function FlightListingPage() {
     <>
       <Navbar />
       <main className="container mx-auto py-8 px-4">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 mt-16">
+        <Card className="mb-8 shadow-lg mt-16">
+          <CardHeader className="rounded-t-xl">
+            <h1 className="text-2xl font-bold">Find Your Perfect Flight</h1>
+          </CardHeader>
+          <CardContent className="p-6">
+            <form className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="space-y-2">
+                <Label htmlFor="from" className="font-medium">From</Label>
+                <Input 
+                  id="from" 
+                  name="from" 
+                  defaultValue={from || ''}
+                  placeholder="City of departure" 
+                  className="w-full"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="to" className="font-medium">To</Label>
+                <Input 
+                  id="to" 
+                  name="to" 
+                  defaultValue={to || ''}
+                  placeholder="City of arrival" 
+                  className="w-full"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="date" className="font-medium">Departure Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !date && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {date ? formatDate(new Date(date)) : <span>Pick a date</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      initialFocus
+                      disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                      selected={date ? new Date(date) : undefined}
+                      onSelect={(selectedDate) => {
+                        if (selectedDate) {
+                          // Format date as YYYY-MM-DD directly to avoid timezone issues
+                          const year = selectedDate.getFullYear();
+                          const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+                          const day = String(selectedDate.getDate()).padStart(2, '0');
+                          const formattedDate = `${year}-${month}-${day}`;
+                          
+                          // Create a new URL search params object based on current params
+                          const params = new URLSearchParams(searchParams.toString());
+                          
+                          // Update the date parameter
+                          params.set('date', formattedDate);
+                          
+                          // Preserve other parameters
+                          if (from) params.set('from', from);
+                          if (to) params.set('to', to);
+                          
+                          // Navigate to the page with the updated parameters
+                          router.push(`/booking-flight?${params.toString()}`);
+                        }
+                      }}
+                    />
+                  </PopoverContent>
+                </Popover>
+                <Input 
+                  type="hidden" 
+                  id="date" 
+                  name="date" 
+                  defaultValue={date || ''}
+                />
+              </div>
+
+              <div className="md:col-span-3 flex justify-end mt-4">
+                <Button 
+                  type="submit"
+                  className="bg-teal-500 hover:bg-teal-600 transition-colors"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    const form = e.currentTarget.form;
+                    if (form) {
+                      const fromValue = form.from.value;
+                      const toValue = form.to.value;
+                      const dateValue = form.date.value;
+                      
+                      const searchParams = new URLSearchParams();
+                      if (fromValue) searchParams.set('from', fromValue);
+                      if (toValue) searchParams.set('to', toValue);
+                      if (dateValue) searchParams.set('date', dateValue);
+                      
+                      window.location.href = `${window.location.pathname}?${searchParams.toString()}`;
+                    }
+                  }}
+                >
+                  <Search className="mr-2 h-4 w-4" /> Search Flights
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 mt-8">
           {/* Filters Section */}
           <div className="lg:col-span-1 space-y-6">
             <div className="flex justify-between items-center">
@@ -968,7 +1093,40 @@ export default function FlightListingPage() {
                           {formatCurrency(flight.price)}
                         </div>
                         <div className="text-xs text-gray-500 mb-4">Includes taxes and charges</div>
-                        <Button className="w-full bg-teal-500 hover:bg-teal-600 transition-colors">
+                        <Button 
+                          className="w-full bg-teal-500 hover:bg-teal-600 transition-colors"
+                          onClick={async () => {
+                            try {
+                              const result = await bookFlight(flight.id, flight.price);
+                              
+                              if (result.success) {
+                                toast.success(`Flight booked successfully! Your seat is ${result.seatNumber}`);
+                                
+                                // Save flight ID to localStorage for the booking summary to use
+                                localStorage.setItem('selectedFlightId', flight.id);
+                                if (result.bookingId) {
+                                  localStorage.setItem('bookingId', result.bookingId);
+                                }
+                                
+                                // Construct a URL with all necessary parameters
+                                if (result.bookingId) {
+                                  const summaryUrl = `/booking-summary?bookingId=${result.bookingId}&flightId=${flight.id}`;
+                                  router.push(summaryUrl);
+                                } else if (result.redirectUrl) {
+                                  router.push(result.redirectUrl);
+                                }
+                              } else if (result.redirectToLogin) {
+                                toast.error("You must be logged in to book a flight");
+                                router.push("/auth/login");
+                              } else {
+                                toast.error(result.message || "Failed to book flight");
+                              }
+                            } catch (error) {
+                              toast.error("An error occurred while booking the flight");
+                              console.error("Flight booking error:", error);
+                            }
+                          }}
+                        >
                           Select 
                         </Button>
                       </div>

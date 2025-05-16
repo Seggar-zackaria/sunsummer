@@ -39,18 +39,66 @@ export async function bookHotelRoom(
       }
     });
 
+    console.log(`Hotel booking created with ID: ${booking.id}`);
     revalidatePath(`/hotel-room/${hotelId}`);
+    
+    const redirectUrl = `/booking-summary?bookingId=${booking.id}&hotelId=${hotelId}&roomId=${roomId}`;
+    console.log(`Redirecting to: ${redirectUrl}`);
     
     return {
       success: true,
       message: "Room booked successfully",
-      bookingId: booking.id
+      bookingId: booking.id,
+      redirectUrl: redirectUrl
     };
   } catch (error) {
     console.error("Error booking room:", error);
     return {
       success: false,
       message: error instanceof Error ? error.message : "Failed to book room"
+    };
+  }
+}
+
+export async function getHotelBookingDetails(id: string) {
+  try {
+    if (!id) {
+      console.error("No hotel booking ID provided");
+      return {
+        success: false,
+        message: "No hotel booking ID provided"
+      };
+    }
+
+    console.log(`Fetching hotel booking details for ID: ${id}`);
+    
+    const hotelBooking = await db.hotelBooking.findUnique({
+      where: { id },
+      include: {
+        hotel: true,
+        room: true
+      }
+    });
+
+    if (!hotelBooking) {
+      console.error(`Hotel booking with ID ${id} not found`);
+      return {
+        success: false,
+        message: "Hotel booking not found"
+      };
+    }
+
+    console.log(`Found hotel booking: ${JSON.stringify(hotelBooking, null, 2)}`);
+    
+    return {
+      success: true,
+      data: hotelBooking
+    };
+  } catch (error) {
+    console.error("Error fetching hotel booking details:", error);
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Failed to fetch hotel booking details"
     };
   }
 } 

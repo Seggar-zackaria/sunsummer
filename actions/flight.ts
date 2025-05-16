@@ -5,7 +5,8 @@ import { flightSchema } from "@/schemas";
 import * as z from "zod";
 import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
-import { parse, startOfDay, endOfDay } from 'date-fns';
+const dateFns = require('date-fns');
+const { parse, startOfDay, endOfDay } = dateFns;
 
 // Define a type for the response
 type FlightResponse<T = any> = {
@@ -64,6 +65,7 @@ export async function addFlight(values: z.infer<typeof flightSchema>): Promise<F
         ...flightData,
         departureTime: departureDateTime,
         arrivalTime: arrivalDateTime,
+        duration: flightData.duration || 0,
         capacity: 180,
         availableSeats: 180,
       },
@@ -203,7 +205,6 @@ export async function getAllFlights() {
         arrivalTime: true,
         status: true,
         price: true,
-        duration: true,
         stops: true,
         airline: true
       }

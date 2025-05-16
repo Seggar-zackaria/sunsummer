@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 
 
 const Footer = () => {
@@ -14,14 +13,7 @@ const Footer = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8 mb-10">
           <div>
             <Link href="/" className="flex items-center mb-4">
-              <Image 
-                src="/globe.svg" 
-                alt="GoLobe Logo" 
-                width={20} 
-                height={20} 
-                className="mr-2" 
-              />
-              <span className="font-bold text-xl text-gray-800">golobe</span>
+              <span className="font-bold text-xl text-gray-800">Sun summer</span>
             </Link>
             
             <div className="flex space-x-3 mt-4">
